@@ -930,6 +930,23 @@
             box-shadow: 0 0 10px rgba(255,215,0,0.25);
         }
 
+        .tourney-count {
+            text-align: center;
+            font-size: clamp(13px, 3.2vw, 17px);
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+        }
+
+        .tourney-count.ok {
+            color: #7dff9a;
+        }
+
+        .tourney-count.bad {
+            color: #ff8f8f;
+        }
+
         .tourney-resume {
             text-align: center;
             padding: 14px;
@@ -1583,6 +1600,7 @@
                         <div class="selection-title">🏆 QUEM VAI LUTAR? 🏆</div>
                         <div class="tourney-hint">Cada um escolhe seu Kaled, e as chaves são sorteadas na hora.</div>
                         <div class="people-checklist" id="peopleChecklist"></div>
+                        <div class="tourney-count" id="tourneyCountHint"></div>
                         <div class="controls">
                             <button id="tourneyStartBtn" onclick="createTournament()">🎲 SORTEAR CHAVES</button>
                         </div>
@@ -1784,11 +1802,34 @@
         // Marcados por padrao: quem esta na lista provavelmente vai lutar
         let tourneySelected = new Set(allPeople());
 
+        // So chave completa: 2, 4, 8, 16... Sem bye, todo mundo luta na 1a rodada.
+        function bracketFeedback(count) {
+            if (count < 2) {
+                return { ok: false, msg: '⚠️ Marca pelo menos 2 lutadores' };
+            }
+            if ((count & (count - 1)) === 0) {
+                return { ok: true, msg: `✅ ${count} lutadores — chave perfeita!` };
+            }
+            const lower = Math.pow(2, Math.floor(Math.log2(count)));
+            const upper = lower * 2;
+            return {
+                ok: false,
+                msg: `⚠️ ${count} não fecha chave: tira ${count - lower} (vira ${lower}) ` +
+                     `ou marca +${upper - count} (vira ${upper})`
+            };
+        }
+
         function updateTourneyStartBtn() {
             const count = allPeople().filter(n => tourneySelected.has(n)).length;
+            const fb = bracketFeedback(count);
             const btn = document.getElementById('tourneyStartBtn');
             btn.textContent = `🎲 SORTEAR CHAVES (${count})`;
-            btn.disabled = count < 2;
+            btn.disabled = !fb.ok;
+
+            const hint = document.getElementById('tourneyCountHint');
+            hint.textContent = fb.msg;
+            hint.classList.toggle('ok', fb.ok);
+            hint.classList.toggle('bad', !fb.ok);
         }
 
         function renderPeopleChecklist() {
@@ -2771,9 +2812,8 @@
 
         function createTournament() {
             const names = allPeople().filter(n => tourneySelected.has(n));
-            if (names.length < 2) {
-                document.getElementById('tournamentStatus').innerHTML =
-                    '<div class="tourney-hint">⚠️ Marca pelo menos 2 lutadores!</div>';
+            if (!bracketFeedback(names.length).ok) {
+                updateTourneyStartBtn();
                 return;
             }
             tournament = {
