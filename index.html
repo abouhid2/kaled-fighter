@@ -846,7 +846,9 @@
 
         .add-person-row input {
             flex: 1;
-            min-width: 0;
+            min-width: 140px;
+            direction: ltr;
+            text-align: left;
             padding: 9px 12px;
             background: rgba(0,0,0,0.55);
             color: #F5DFA0;
@@ -1417,8 +1419,11 @@
                 padding: 12px;
             }
 
+            /* Botao dimensiona pelo conteudo; largura total esmagava o input
+               ao lado e o teclado Android invertia o texto digitado */
             button {
-                width: 100%;
+                width: auto;
+                max-width: 100%;
             }
         }
 
