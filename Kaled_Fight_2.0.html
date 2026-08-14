@@ -899,7 +899,10 @@
         /* Botao simples com estado proprio: label+checkbox dava toggle
            fantasma em alguns cliques e "todo mundo" acabava no torneio */
         button.person-pill {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
             width: 100%;
             text-align: center;
             padding: 8px 6px;
@@ -928,6 +931,92 @@
             background: rgba(255,215,0,0.12);
             color: #FFD700;
             box-shadow: 0 0 10px rgba(255,215,0,0.25);
+        }
+
+        .pill-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pill-x {
+            flex: none;
+            font-size: 0.8em;
+            opacity: 0.45;
+            padding: 0 2px;
+        }
+
+        .pill-x:hover {
+            opacity: 1;
+            color: #FF6B6B;
+        }
+
+        /* ===== Placar geral ===== */
+        .score-menu-row {
+            margin-bottom: 4px;
+        }
+
+        .score-menu-row button {
+            padding: 7px 18px;
+            font-size: clamp(11px, 2.6vw, 14px);
+        }
+
+        #scoreList {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 8px;
+            max-width: 900px;
+            margin: 0 auto 14px;
+        }
+
+        .score-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border: 2px solid #8B0000;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.45);
+            padding: 8px 12px;
+        }
+
+        .score-row.podium {
+            border-color: #FFD700;
+            background: rgba(255,215,0,0.08);
+        }
+
+        .score-name {
+            color: #e8d7b0;
+            font-weight: bold;
+            font-size: clamp(13px, 3vw, 16px);
+            letter-spacing: 1px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .score-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: none;
+        }
+
+        .score-ctrl button {
+            padding: 2px 10px;
+            font-size: 15px;
+            line-height: 1.4;
+            border-width: 2px;
+            box-shadow: none;
+        }
+
+        .score-val {
+            color: #FFD700;
+            font-weight: 900;
+            font-size: clamp(16px, 3.6vw, 20px);
+            min-width: 2ch;
+            text-align: center;
+            text-shadow: 0 0 8px rgba(255,215,0,0.35);
         }
 
         .tourney-count {
@@ -1570,6 +1659,9 @@
                            onkeydown="if (event.key === 'Enter') handleAddPerson()">
                     <button type="button" onclick="handleAddPerson()">➕ ADICIONAR</button>
                 </div>
+                <div class="controls score-menu-row">
+                    <button type="button" onclick="openScoreboard()">🏅 PLACAR</button>
+                </div>
                 <div id="quickSelectArea">
                     <div class="decorative-line"></div>
                     <div class="selection-title">⚡ ESCOLHA SEU KALED ⚡</div>
@@ -1698,6 +1790,19 @@
             </div>
         </div>
 
+        <!-- Placar geral -->
+        <div id="scoreScreen" class="screen">
+            <div class="selection-screen">
+                <div class="selection-title">🏅 PLACAR GERAL 🏅</div>
+                <div class="tourney-hint">Vitórias em lutas VS e de torneio. Ajusta com − e +.</div>
+                <div id="scoreList"></div>
+                <div class="controls">
+                    <button onclick="resetScores()">🗑️ ZERAR</button>
+                    <button onclick="showScreen('selectionScreen')">↶ MENU</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Splash pré-luta (estilo abertura de luta de fliperama) -->
         <div id="vsScreen" class="screen">
             <div class="selection-screen vs-splash" onclick="startPendingBattle()">
@@ -1741,7 +1846,9 @@
 
         // ===== Pessoas reais (persistem em localStorage) =====
         const PEOPLE_KEY = 'kaledFighter.people.custom';
+        const REMOVED_KEY = 'kaledFighter.people.removed';
         const TOURNEY_KEY = 'kaledFighter.tournament';
+        const SCORES_KEY = 'kaledFighter.scores';
 
         const DEFAULT_PEOPLE = [
             'Alex', 'GG', 'Bizao', 'Bizin', 'Andre', 'JM', 'JV',
@@ -1759,17 +1866,26 @@
         }
 
         let customPeople = readJson(PEOPLE_KEY, []).filter(n => typeof n === 'string');
+        let removedPeople = readJson(REMOVED_KEY, []).filter(n => typeof n === 'string');
 
         function allPeople() {
-            return DEFAULT_PEOPLE.concat(customPeople);
+            return DEFAULT_PEOPLE.filter(n => !removedPeople.includes(n)).concat(customPeople);
         }
 
         function handleAddPerson() {
             const input = document.getElementById('newPersonName');
             const name = input.value.trim();
             if (!name) return;
-            const dup = allPeople().some(p => p.toLowerCase() === name.toLowerCase());
-            if (!dup) {
+
+            // Nome fixo removido antes volta a lista em vez de virar duplicata
+            const revived = removedPeople.find(p => p.toLowerCase() === name.toLowerCase());
+            if (revived) {
+                removedPeople = removedPeople.filter(p => p !== revived);
+                localStorage.setItem(REMOVED_KEY, JSON.stringify(removedPeople));
+                tourneySelected.add(revived);
+                renderPersonSelects();
+                renderPeopleChecklist();
+            } else if (!allPeople().some(p => p.toLowerCase() === name.toLowerCase())) {
                 customPeople.push(name);
                 localStorage.setItem(PEOPLE_KEY, JSON.stringify(customPeople));
                 tourneySelected.add(name);
@@ -1778,6 +1894,93 @@
             }
             input.value = '';
             input.focus();
+        }
+
+        // ===== Placar geral: vitorias por pessoa, editavel na tela de placar =====
+        let scores = readJson(SCORES_KEY, {});
+        if (typeof scores !== 'object' || Array.isArray(scores)) scores = {};
+
+        function saveScores() {
+            localStorage.setItem(SCORES_KEY, JSON.stringify(scores));
+        }
+
+        function addWin(name) {
+            if (!name) return;
+            scores[name] = (scores[name] || 0) + 1;
+            saveScores();
+        }
+
+        function bumpScore(name, delta) {
+            scores[name] = Math.max(0, (scores[name] || 0) + delta);
+            saveScores();
+            renderScoreboard();
+        }
+
+        function resetScores() {
+            if (!confirm('Zerar o placar geral?')) return;
+            scores = {};
+            saveScores();
+            renderScoreboard();
+        }
+
+        function openScoreboard() {
+            renderScoreboard();
+            showScreen('scoreScreen');
+        }
+
+        function renderScoreboard() {
+            // Uniao: lista atual + quem ja pontuou (mesmo se removido depois)
+            const names = [...new Set(allPeople().concat(Object.keys(scores)))];
+            names.sort((a, b) => (scores[b] || 0) - (scores[a] || 0) || a.localeCompare(b));
+
+            const box = document.getElementById('scoreList');
+            box.innerHTML = '';
+            const medals = ['🥇', '🥈', '🥉'];
+            let medalIdx = 0;
+
+            names.forEach(name => {
+                const val = scores[name] || 0;
+                const medal = val > 0 && medalIdx < 3 ? medals[medalIdx++] : '';
+
+                const row = document.createElement('div');
+                row.className = 'score-row' + (medal ? ' podium' : '');
+
+                const label = document.createElement('span');
+                label.className = 'score-name';
+                label.textContent = `${medal ? medal + ' ' : ''}${name}`;
+
+                const ctrl = document.createElement('div');
+                ctrl.className = 'score-ctrl';
+                const minus = document.createElement('button');
+                minus.type = 'button';
+                minus.textContent = '−';
+                minus.onclick = () => bumpScore(name, -1);
+                const num = document.createElement('span');
+                num.className = 'score-val';
+                num.textContent = val;
+                const plus = document.createElement('button');
+                plus.type = 'button';
+                plus.textContent = '+';
+                plus.onclick = () => bumpScore(name, 1);
+                ctrl.append(minus, num, plus);
+
+                row.append(label, ctrl);
+                box.appendChild(row);
+            });
+        }
+
+        function removePerson(name) {
+            if (!confirm(`Remover ${name} da lista?`)) return;
+            if (customPeople.includes(name)) {
+                customPeople = customPeople.filter(p => p !== name);
+                localStorage.setItem(PEOPLE_KEY, JSON.stringify(customPeople));
+            } else if (DEFAULT_PEOPLE.includes(name) && !removedPeople.includes(name)) {
+                removedPeople.push(name);
+                localStorage.setItem(REMOVED_KEY, JSON.stringify(removedPeople));
+            }
+            tourneySelected.delete(name);
+            renderPersonSelects();
+            renderPeopleChecklist();
         }
 
         function renderPersonSelects() {
@@ -1839,7 +2042,18 @@
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'person-pill' + (tourneySelected.has(name) ? ' on' : '');
-                btn.textContent = name;
+                const label = document.createElement('span');
+                label.className = 'pill-name';
+                label.textContent = name;
+                const x = document.createElement('span');
+                x.className = 'pill-x';
+                x.textContent = '✕';
+                x.title = `Remover ${name} da lista`;
+                x.onclick = (e) => {
+                    e.stopPropagation();
+                    removePerson(name);
+                };
+                btn.append(label, x);
                 btn.onclick = () => {
                     if (tourneySelected.has(name)) tourneySelected.delete(name);
                     else tourneySelected.add(name);
@@ -2619,6 +2833,9 @@
                 recordMatchWinner(battleContext.r, battleContext.m,
                     winner === player1 ? match.p1 : match.p2);
             }
+
+            // Placar geral: toda vitoria de gente de verdade conta (VS e torneio)
+            if (winner.personName) addWin(winner.personName);
 
             koTimer = setTimeout(() => {
                 koTimer = null;
